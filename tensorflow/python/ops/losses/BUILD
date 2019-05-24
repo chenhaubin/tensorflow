@@ -3,10 +3,6 @@ package(
         "//engedu/ml/tf_from_scratch:__pkg__",
         "//tensorflow:internal",
     ],
-    features = [
-        "-layering_check",
-        "-parse_headers",
-    ],
 )
 
 load("//tensorflow:tensorflow.bzl", "py_test")
@@ -36,26 +32,21 @@ py_library(
     ],
 )
 
+py_library(
+    name = "loss_reduction",
+    srcs = ["loss_reduction.py"],
+    srcs_version = "PY2AND3",
+)
+
 py_test(
     name = "util_test",
     size = "small",
     srcs = ["util_test.py"],
+    python_version = "PY2",
     srcs_version = "PY2AND3",
     deps = [
         ":losses",
         "//tensorflow/python:client_testlib",
         "//tensorflow/python:framework_for_generated_wrappers",
     ],
-)
-
-filegroup(
-    name = "all_files",
-    srcs = glob(
-        ["**/*"],
-        exclude = [
-            "**/METADATA",
-            "**/OWNERS",
-        ],
-    ),
-    visibility = ["//tensorflow:__subpackages__"],
 )

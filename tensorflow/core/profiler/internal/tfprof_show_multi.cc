@@ -27,26 +27,29 @@ limitations under the License.
 namespace tensorflow {
 namespace tfprof {
 
-const TFMultiGraphNodeProto& TFMultiShow::Show(const Options& opts) {
-  if (opts.output_type == kOutput[3]) {
-    return ShowInternal(opts, nullptr)->proto();
-  } else if (opts.output_type == kOutput[0]) {
+const MultiGraphNodeProto& TFMultiShow::Show(const string& prefix,
+                                             const Options& opts) {
+  if (opts.output_type == kOutput[0]) {
     Timeline timeline(opts.step, opts.output_options.at(kTimelineOpts[0]));
     return ShowInternal(opts, &timeline)->proto();
-  } else if (opts.output_type == kOutput[2]) {
-    const ShowMultiNode* root = ShowInternal(opts, nullptr);
-    Status s =
-        WriteStringToFile(Env::Default(), opts.output_options.at(kFileOpts[0]),
-                          root->formatted_str);
-    if (!s.ok()) {
-      fprintf(stderr, "%s\n", s.ToString().c_str());
-    }
-    return root->proto();
   } else {
-    const ShowMultiNode* root = ShowInternal(opts, nullptr);
-    printf("%s", root->formatted_str.c_str());
-    fflush(stdout);
-    return root->proto();
+    const ShowMultiNode* ret = ShowInternal(opts, nullptr);
+    if (opts.output_type == kOutput[1]) {
+      printf("%s", (prefix + ret->formatted_str).c_str());
+      fflush(stdout);
+    } else if (opts.output_type == kOutput[2]) {
+      Status s = WriteStringToFile(Env::Default(),
+                                   opts.output_options.at(kFileOpts[0]),
+                                   prefix + ret->formatted_str);
+      if (!s.ok()) {
+        fprintf(stderr, "%s\n", s.ToString().c_str());
+      }
+    } else if (opts.output_type == kOutput[3] ||
+               opts.output_type == kOutput[4]) {
+    } else {
+      fprintf(stderr, "Unknown output type: %s\n", opts.output_type.c_str());
+    }
+    return ret->proto();
   }
 }
 
@@ -63,7 +66,13 @@ bool TFMultiShow::ShouldShow(const ShowMultiNode* node, const Options& opts,
   // want to see the middle code traces (i.e. their own codes.), instead
   // of the TensorFlow internal codes traces.
   if (node->proto().total_requested_bytes() < opts.min_bytes ||
+      node->proto().total_peak_bytes() < opts.min_peak_bytes ||
+      node->proto().total_residual_bytes() < opts.min_residual_bytes ||
+      node->proto().total_output_bytes() < opts.min_output_bytes ||
       node->proto().total_exec_micros() < opts.min_micros ||
+      node->proto().total_accelerator_exec_micros() <
+          opts.min_accelerator_micros ||
+      node->proto().total_cpu_exec_micros() < opts.min_cpu_micros ||
       node->proto().total_parameters() < opts.min_params ||
       node->proto().total_float_ops() < opts.min_float_ops ||
       depth > opts.max_depth || !ShouldShowIfExtra(node, opts, depth)) {
@@ -107,6 +116,15 @@ bool TFMultiShow::ReAccount(ShowMultiNode* node, const Options& opts) {
 string TFMultiShow::FormatLegend(const Options& opts) const {
   std::vector<string> legends;
   if (opts.select.find(kShown[0]) != opts.select.end()) {
+    legends.push_back("requested bytes");
+  }
+  if (opts.select.find(kShown[11]) != opts.select.end()) {
+    legends.push_back("peak bytes");
+  }
+  if (opts.select.find(kShown[12]) != opts.select.end()) {
+    legends.push_back("residual bytes");
+  }
+  if (opts.select.find(kShown[13]) != opts.select.end()) {
     legends.push_back("output bytes");
   }
   if (opts.select.find(kShown[1]) != opts.select.end()) {
@@ -141,15 +159,14 @@ string TFMultiShow::FormatLegend(const Options& opts) const {
     legends.push_back("input shapes");
   }
   return strings::Printf("node name | %s\n",
-                         str_util::Join(legends, " | ").c_str());
+                         absl::StrJoin(legends, " | ").c_str());
 }
 
-string TFMultiShow::FormatInputShapes(
-    const TFMultiGraphNodeProto& proto) const {
+string TFMultiShow::FormatInputShapes(const MultiGraphNodeProto& proto) const {
   // input_shape string -> (static defined count, run count, run_micros)
   std::map<string, std::tuple<int64, int64, int64>> input_shapes_attr;
   for (int i = 0; i < proto.graph_nodes_size(); ++i) {
-    const TFGraphNodeProto& gnode = proto.graph_nodes(i);
+    const GraphNodeProto& gnode = proto.graph_nodes(i);
     // Convert and sort by input_idx.
     std::map<int, std::vector<int64>> input_shapes;
     for (const auto& inp : gnode.input_shapes()) {
@@ -162,11 +179,11 @@ string TFMultiShow::FormatInputShapes(
         input_vec.push_back(strings::Printf("%d:unknown", s.first));
       } else {
         input_vec.push_back(strings::Printf(
-            "%d:%s", s.first, str_util::Join(s.second, "x").c_str()));
+            "%d:%s", s.first, absl::StrJoin(s.second, "x").c_str()));
       }
     }
     string shape_type_str = strings::Printf(
-        "input_type: %s", str_util::Join(input_vec, ",\t").c_str());
+        "input_type: %s", absl::StrJoin(input_vec, ",\t").c_str());
     auto t = input_shapes_attr.find(shape_type_str);
     if (t == input_shapes_attr.end()) {
       input_shapes_attr.insert(
@@ -198,7 +215,7 @@ string TFMultiShow::FormatInputShapes(
         "%s\t(run*%lld|defined*%lld)\texec_time: %s", s.first.c_str(),
         std::get<1>(t), std::get<0>(t), FormatTime(std::get<2>(t)).c_str()));
   }
-  return str_util::Join(input_types, "\n");
+  return absl::StrJoin(input_types, "\n");
 }
 
 std::vector<string> TFMultiShow::FormatTimes(const ShowMultiNode* node,

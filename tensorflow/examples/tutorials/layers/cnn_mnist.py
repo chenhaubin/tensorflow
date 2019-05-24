@@ -86,19 +86,18 @@ def cnn_model_fn(features, labels, mode):
   # Output Tensor Shape: [batch_size, 10]
   logits = tf.layers.dense(inputs=dropout, units=10)
 
-  # Generate Predictions (for PREDICT mode)
-  predicted_classes = tf.argmax(input=logits, axis=1)
+  predictions = {
+      # Generate predictions (for PREDICT and EVAL mode)
+      "classes": tf.argmax(input=logits, axis=1),
+      # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
+      # `logging_hook`.
+      "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
+  }
   if mode == tf.estimator.ModeKeys.PREDICT:
-    predictions = {
-        "classes": predicted_classes,
-        "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
-    }
     return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
 
   # Calculate Loss (for both TRAIN and EVAL modes)
-  onehot_labels = tf.one_hot(indices=tf.cast(labels, tf.int32), depth=10)
-  loss = tf.losses.softmax_cross_entropy(
-      onehot_labels=onehot_labels, logits=logits)
+  loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
 
   # Configure the Training Op (for TRAIN mode)
   if mode == tf.estimator.ModeKeys.TRAIN:
@@ -111,7 +110,7 @@ def cnn_model_fn(features, labels, mode):
   # Add evaluation metrics (for EVAL mode)
   eval_metric_ops = {
       "accuracy": tf.metrics.accuracy(
-          labels=labels, predictions=predicted_classes)}
+          labels=labels, predictions=predictions["classes"])}
   return tf.estimator.EstimatorSpec(
       mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
@@ -135,7 +134,7 @@ def main(unused_argv):
       tensors=tensors_to_log, every_n_iter=50)
 
   # Train the model
-  train_input_fn = tf.estimator.inputs.numpy_input_fn(
+  train_input_fn = tf.compat.v1.estimator.inputs.numpy_input_fn(
       x={"x": train_data},
       y=train_labels,
       batch_size=100,
@@ -147,11 +146,8 @@ def main(unused_argv):
       hooks=[logging_hook])
 
   # Evaluate the model and print results
-  eval_input_fn = tf.estimator.inputs.numpy_input_fn(
-      x={"x": eval_data},
-      y=eval_labels,
-      num_epochs=1,
-      shuffle=False)
+  eval_input_fn = tf.compat.v1.estimator.inputs.numpy_input_fn(
+      x={"x": eval_data}, y=eval_labels, num_epochs=1, shuffle=False)
   eval_results = mnist_classifier.evaluate(input_fn=eval_input_fn)
   print(eval_results)
 

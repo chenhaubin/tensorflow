@@ -9,8 +9,8 @@ package(default_visibility = ["//visibility:public"])
 
 load(
     "//tensorflow:tensorflow.bzl",
-    "tf_gen_op_wrapper_py",
     "tf_custom_op_library",
+    "tf_gen_op_wrapper_py",  # @unused
 )
 
 py_library(
@@ -48,16 +48,4 @@ filegroup(
     data = glob([
         "**/*.py",
     ]),
-)
-
-filegroup(
-    name = "all_files",
-    srcs = glob(
-        ["**/*"],
-        exclude = [
-            "**/METADATA",
-            "**/OWNERS",
-        ],
-    ),
-    visibility = ["//tensorflow:__subpackages__"],
 )

@@ -57,7 +57,7 @@ For example,
   # delete everything not in 'both'
   to_delete = gc.negation(both)
   for p in to_delete(all_paths):
-    gfile.DeleteRecursively(p.path)  # deletes:  "/tmp/1", "/tmp/2",
+    gfile.rmtree(p.path)  # deletes:  "/tmp/1", "/tmp/2",
                                      # "/tmp/3", "/tmp/4", "/tmp/6",
 """
 
@@ -70,14 +70,14 @@ import heapq
 import math
 import os
 
-from six.moves import xrange  # pylint: disable=redefined-builtin
 from tensorflow.python.platform import gfile
 from tensorflow.python.util.deprecation import deprecated
 
 Path = collections.namedtuple('Path', 'path export_version')
 
 
-@deprecated('2017-06-30', 'Please use SavedModel instead.')
+@deprecated('2017-06-30',
+            'No longer supported. Switch to SavedModel immediately.')
 def largest_export_versions(n):
   """Creates a filter that keeps the largest n export versions.
 
@@ -98,7 +98,8 @@ def largest_export_versions(n):
   return keep
 
 
-@deprecated('2017-06-30', 'Please use SavedModel instead.')
+@deprecated('2017-06-30',
+            'No longer supported. Switch to SavedModel immediately.')
 def one_of_every_n_export_versions(n):
   r"""Creates a filter that keeps one of every n export versions.
 
@@ -128,7 +129,8 @@ def one_of_every_n_export_versions(n):
   return keep
 
 
-@deprecated('2017-06-30', 'Please use SavedModel instead.')
+@deprecated('2017-06-30',
+            'No longer supported. Switch to SavedModel immediately.')
 def mod_export_version(n):
   """Creates a filter that keeps every export that is a multiple of n.
 
@@ -147,7 +149,8 @@ def mod_export_version(n):
   return keep
 
 
-@deprecated('2017-06-30', 'Please use SavedModel instead.')
+@deprecated('2017-06-30',
+            'No longer supported. Switch to SavedModel immediately.')
 def union(lf, rf):
   """Creates a filter that keeps the union of two filters.
 
@@ -165,7 +168,8 @@ def union(lf, rf):
   return keep
 
 
-@deprecated('2017-06-30', 'Please use SavedModel instead.')
+@deprecated('2017-06-30',
+            'No longer supported. Switch to SavedModel immediately.')
 def negation(f):
   """Negate a filter.
 
@@ -182,7 +186,8 @@ def negation(f):
   return keep
 
 
-@deprecated('2017-06-30', 'Please use SavedModel instead.')
+@deprecated('2017-06-30',
+            'No longer supported. Switch to SavedModel immediately.')
 def get_paths(base_dir, parser):
   """Gets a list of Paths in a given directory.
 

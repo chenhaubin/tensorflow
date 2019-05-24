@@ -62,7 +62,7 @@ string FormatMemory(int64 bytes) {
 }
 
 string FormatShapes(const std::vector<int64>& shape) {
-  return str_util::Join(shape, "x");
+  return absl::StrJoin(shape, "x");
 }
 
 string StringReplace(const string& str, const string& oldsub,
@@ -93,7 +93,7 @@ tensorflow::Status ReturnError(const std::vector<string>& pieces, int idx) {
 
 bool CaseEqual(StringPiece s1, StringPiece s2) {
   if (s1.size() != s2.size()) return false;
-  return str_util::Lowercase(s1) == str_util::Lowercase(s2);
+  return absl::AsciiStrToLower(s1) == absl::AsciiStrToLower(s2);
 }
 
 bool StringToBool(StringPiece str, bool* value) {
@@ -140,35 +140,66 @@ tensorflow::Status ParseCmdLine(const string& line, string* cmd,
       ++i;
     } else if (pieces[i] == tensorflow::tfprof::kOptions[2]) {
       if (pieces.size() <= i + 1 ||
-          !strings::safe_strto64(pieces[i + 1], &opts->min_micros)) {
+          !strings::safe_strto64(pieces[i + 1], &opts->min_peak_bytes)) {
         return ReturnError(pieces, i);
       }
       ++i;
     } else if (pieces[i] == tensorflow::tfprof::kOptions[3]) {
       if (pieces.size() <= i + 1 ||
-          !strings::safe_strto64(pieces[i + 1], &opts->min_params)) {
+          !strings::safe_strto64(pieces[i + 1], &opts->min_residual_bytes)) {
         return ReturnError(pieces, i);
       }
       ++i;
     } else if (pieces[i] == tensorflow::tfprof::kOptions[4]) {
       if (pieces.size() <= i + 1 ||
-          !strings::safe_strto64(pieces[i + 1], &opts->min_float_ops)) {
+          !strings::safe_strto64(pieces[i + 1], &opts->min_output_bytes)) {
         return ReturnError(pieces, i);
       }
       ++i;
     } else if (pieces[i] == tensorflow::tfprof::kOptions[5]) {
       if (pieces.size() <= i + 1 ||
-          !strings::safe_strto64(pieces[i + 1], &opts->min_occurrence)) {
+          !strings::safe_strto64(pieces[i + 1], &opts->min_micros)) {
         return ReturnError(pieces, i);
       }
       ++i;
     } else if (pieces[i] == tensorflow::tfprof::kOptions[6]) {
       if (pieces.size() <= i + 1 ||
-          !strings::safe_strto64(pieces[i + 1], &opts->step)) {
+          !strings::safe_strto64(pieces[i + 1],
+                                 &opts->min_accelerator_micros)) {
         return ReturnError(pieces, i);
       }
       ++i;
     } else if (pieces[i] == tensorflow::tfprof::kOptions[7]) {
+      if (pieces.size() <= i + 1 ||
+          !strings::safe_strto64(pieces[i + 1], &opts->min_cpu_micros)) {
+        return ReturnError(pieces, i);
+      }
+      ++i;
+    } else if (pieces[i] == tensorflow::tfprof::kOptions[8]) {
+      if (pieces.size() <= i + 1 ||
+          !strings::safe_strto64(pieces[i + 1], &opts->min_params)) {
+        return ReturnError(pieces, i);
+      }
+      ++i;
+    } else if (pieces[i] == tensorflow::tfprof::kOptions[9]) {
+      if (pieces.size() <= i + 1 ||
+          !strings::safe_strto64(pieces[i + 1], &opts->min_float_ops)) {
+        return ReturnError(pieces, i);
+      }
+      ++i;
+    } else if (pieces[i] == tensorflow::tfprof::kOptions[10]) {
+      if (pieces.size() <= i + 1 ||
+          !strings::safe_strto64(pieces[i + 1], &opts->min_occurrence)) {
+        return ReturnError(pieces, i);
+      }
+      ++i;
+    } else if (pieces[i] == tensorflow::tfprof::kOptions[11]) {
+      if (pieces.size() <= i + 1 ||
+          !strings::safe_strto64(pieces[i + 1], &opts->step)) {
+        return ReturnError(pieces, i);
+      }
+      ++i;
+    } else if (pieces[i] == tensorflow::tfprof::kOptions[12]) {
       if (pieces.size() <= i + 1) {
         return ReturnError(pieces, i);
       }
@@ -180,42 +211,42 @@ tensorflow::Status ParseCmdLine(const string& line, string* cmd,
       }
       opts->order_by = *order_by;
       ++i;
-    } else if (pieces[i] == tensorflow::tfprof::kOptions[8]) {
+    } else if (pieces[i] == tensorflow::tfprof::kOptions[13]) {
       if (pieces.size() <= i + 1) {
         return ReturnError(pieces, i);
       }
       opts->account_type_regexes = str_util::Split(StripQuote(pieces[i + 1]),
                                                    ',', str_util::SkipEmpty());
       ++i;
-    } else if (pieces[i] == tensorflow::tfprof::kOptions[9]) {
+    } else if (pieces[i] == tensorflow::tfprof::kOptions[14]) {
       if (pieces.size() <= i + 1) {
         return ReturnError(pieces, i);
       }
       opts->start_name_regexes = str_util::Split(StripQuote(pieces[i + 1]), ',',
                                                  str_util::SkipEmpty());
       ++i;
-    } else if (pieces[i] == tensorflow::tfprof::kOptions[10]) {
+    } else if (pieces[i] == tensorflow::tfprof::kOptions[15]) {
       if (pieces.size() <= i + 1) {
         return ReturnError(pieces, i);
       }
       opts->trim_name_regexes = str_util::Split(StripQuote(pieces[i + 1]), ',',
                                                 str_util::SkipEmpty());
       ++i;
-    } else if (pieces[i] == tensorflow::tfprof::kOptions[11]) {
+    } else if (pieces[i] == tensorflow::tfprof::kOptions[16]) {
       if (pieces.size() <= i + 1) {
         return ReturnError(pieces, i);
       }
       opts->show_name_regexes = str_util::Split(StripQuote(pieces[i + 1]), ',',
                                                 str_util::SkipEmpty());
       ++i;
-    } else if (pieces[i] == tensorflow::tfprof::kOptions[12]) {
+    } else if (pieces[i] == tensorflow::tfprof::kOptions[17]) {
       if (pieces.size() <= i + 1) {
         return ReturnError(pieces, i);
       }
       opts->hide_name_regexes = str_util::Split(StripQuote(pieces[i + 1]), ',',
                                                 str_util::SkipEmpty());
       ++i;
-    } else if (pieces[i] == tensorflow::tfprof::kOptions[13]) {
+    } else if (pieces[i] == tensorflow::tfprof::kOptions[18]) {
       if ((pieces.size() > i + 1 && pieces[i + 1].find("-") == 0) ||
           pieces.size() == i + 1) {
         opts->account_displayed_op_only = true;
@@ -225,7 +256,7 @@ tensorflow::Status ParseCmdLine(const string& line, string* cmd,
       } else {
         ++i;
       }
-    } else if (pieces[i] == tensorflow::tfprof::kOptions[14]) {
+    } else if (pieces[i] == tensorflow::tfprof::kOptions[19]) {
       if (pieces.size() <= i + 1) {
         return ReturnError(pieces, i);
       }
@@ -242,7 +273,7 @@ tensorflow::Status ParseCmdLine(const string& line, string* cmd,
       }
       opts->select = requested_set;
       ++i;
-    } else if (pieces[i] == tensorflow::tfprof::kOptions[15]) {
+    } else if (pieces[i] == tensorflow::tfprof::kOptions[20]) {
       if (pieces.size() <= i + 1) {
         return ReturnError(pieces, i);
       }
@@ -260,82 +291,139 @@ tensorflow::Status ParseCmdLine(const string& line, string* cmd,
 
 void PrintHelp() {
   printf(
-      "\nSee go/tfprof for detail tutorial.\n"
-      "\nCommands\n\n"
-      "  scope: Each op has its op name in TensorFlow, such as 'n1', 'n1/n2', "
-      "'n1/n2/n3'. 'n1/n2' is a child of 'n1'. 'scope' command builds "
-      "a name scope tree and aggregates statistics based on it.\n\n"
-      "  graph: ops in TensorFlow are organized as a graph based on their "
-      "the source (inputs) and sink (outputs). 'graph' command builds "
-      "a graph pointing *from output to input*, and aggregates "
-      "statistics based on it.\n\n"
-      "  set: Set options that will be default for follow up commands.\n\n"
-      "  help: Show helps.\n"
-      "\nOptions\n\n"
-      "Press Enter in CLI to see default option values.\n\n"
-      "  -max_depth: Show ops that are at most this number of hops from "
-      "starting op in the tree/graph structure.\n\n"
-      "  -min_bytes: Show ops that request at least this number of bytes.\n\n"
-      "  -min_micros: Show ops that spend at least this number of micros to "
-      "run.\n\n"
-      "  -min_params: Show ops that contains at least this number of "
-      "parameters.\n\n"
-      "  -min_float_ops: Show ops that contain at least this number of "
-      "float operations. Only available if an op has "
-      "op.RegisterStatistics() defined and OpLog is "
-      "provided\n\n"
-      "  -min_occurrence: Show the op types that are at least used this number "
-      "of times. Only available in op view.\n\n"
-      "  -step: Show the stats of a step when multiple steps of "
-      "RunMetadata were added. By default (-1), show the average of all steps."
-      "  -order_by: Order the results by [name|depth|bytes|micros"
-      "|accelerator_micros|cpu_micros|params|float_ops]\n\n"
-      "  -account_type_regexes: Account and display the ops whose types match "
-      "one of the type regexes specified. tfprof "
-      "allow user to define extra op types for ops "
-      "through tensorflow.tfprof.OpLog proto. regexes "
-      "are comma-sperated.\n\n"
-      "  -start_name_regexes: Show ops starting from the ops that matches the "
-      "regexes, recursively. regexes are "
-      "comma-separated.\n\n"
-      "  -trim_name_regexes: Hide ops starting from the ops that matches the "
-      "regexes, recursively, regexes are comma-seprated. "
-      "\n\n"
-      "  -show_name_regexes: Show ops that match the regexes. regexes are "
-      "comma-seprated.\n\n"
-      "  -hide_name_regexes: Hide ops that match the regexes. regexes are "
-      "comma-seprated.\n\n"
-      ""
-      "  Notes: For each op, -acount_type_regexes is first evaluated, "
-      "only ops with types matching the specified regexes are accounted and "
-      "selected for displayed. -start/trim/show/hide_name_regexes are used "
-      "to further filter ops for display. -start_name_regexes is evaluated "
-      "first to search the starting ops to display. Descendants of starting "
-      "ops are then evaluated against show/hide_name_regexes to make display "
-      "decision. If an op matches trim_name_regexes, all its descendants are "
-      "hidden.\n"
-      "Ops statistics are *accounted even if they are hidden* as long as "
-      "they match the -account_xxx options.\n\n"
-      "  -account_displayed_op_only: If True, only account the statistics of "
-      "ops eventually displayed. If False, account all "
-      "op statistics matching -account_type_regexes recursively.\n\n"
-      "  -select: Comma-separated list of metrics to show: [bytes|micros|"
-      "accelerator_micros|cpu_micros|params|float_ops|tensor_value|device|"
-      "op_types|input_shapes]."
-      "\n\n"
-      "  -dump_to_file: Dump the output to a file, instead of terminal.\n\n"
-      ""
-      "Examples\n"
-      "  Assuming a toy model:\n"
-      "    intput(typeB)->conv2d_1(typeA)->conv2d_2(typeA)->"
-      "fc(typeA)->cost(typeA)->summarize(typeC)\n"
-      "  Command:\n"
-      "    tfprof> graph -account_type_regexes typeA -start_name_regexes "
-      "cost.* -show_name_regexes conv2d.* -max_depth 10\n\n"
-      "  The above command only aggregate statistics of all ops of typeA ("
-      "hence ignoring input(typeB)). It will start looking for candidate to "
-      "display from cost.* and finally displays conv2d_1 and conv2d_2.\n\n");
+      "See https://github.com/tensorflow/tensorflow/tree/master/tensorflow/core/profiler/"
+      "README.md for profiler tutorial.\n");
+  printf(
+      "See https://github.com/tensorflow/tensorflow/tree/master/tensorflow/core/profiler/"
+      "g3doc/command_line.md for command line tool tutorial.\n");
+  printf(
+      "profiler --profile_path=<ProfileProto binary file> # required\n"
+      "\nOr:\n\n"
+      "profiler --graph_path=<GraphDef proto file>  "
+      "# Contains model graph info (no needed for eager execution)\n"
+      "         --run_meta_path=<RunMetadata proto file>  "
+      "# Contains runtime info. Optional.\n"
+      "         --run_log_path=<OpLogProto proto file>  "
+      "# Contains extra source code, flops, custom type info. Optional\n\n");
+  printf(
+      "\nTo skip interactive mode, append one of the following commands:\n"
+      "  scope: Organize profiles based on name scopes.\n"
+      "  graph: Organize profiles based on graph node input/output.\n"
+      "  op: Organize profiles based on operation type.\n"
+      "  code: Organize profiles based on python codes (need op_log_path).\n"
+      "  advise: Auto-profile and advise. (experimental)\n"
+      "  set: Set options that will be default for follow up commands.\n"
+      "  help: Show helps.\n");
   fflush(stdout);
+}
+
+static const char* const kTotalMicrosHelp =
+    "total execution time: Sum of accelerator execution time and cpu execution "
+    "time.";
+static const char* const kAccMicrosHelp =
+    "accelerator execution time: Time spent executing on the accelerator. "
+    "This is normally measured by the actual hardware library.";
+static const char* const kCPUHelp =
+    "cpu execution time: The time from the start to the end of the operation. "
+    "It's the sum of actual cpu run time plus the time that it spends waiting "
+    "if part of computation is launched asynchronously.";
+static const char* const kBytes =
+    "requested bytes: The memory requested by the operation, accumulatively.";
+static const char* const kPeakBytes =
+    "peak bytes: The peak amount of memory that the operation is holding at "
+    "some point.";
+static const char* const kResidualBytes =
+    "residual bytes: The memory not de-allocated after the operation finishes.";
+static const char* const kOutputBytes =
+    "output bytes: The memory that is output from the operation (not "
+    "necessarilty allocated by the operation)";
+static const char* const kOccurrence =
+    "occurrence: The number of times it occurs";
+static const char* const kInputShapes =
+    "input shape: The shape of input tensors";
+static const char* const kDevice = "device: which device is placed on.";
+static const char* const kFloatOps =
+    "flops: Number of float operations. Note: Please read the implementation "
+    "for the math behind it.";
+static const char* const kParams =
+    "param: Number of parameters (in the Variable).";
+static const char* const kTensorValue = "tensor_value: Not supported now.";
+static const char* const kOpTypes =
+    "op_types: The attributes of the operation, includes the Kernel name "
+    "device placed on and user-defined strings.";
+
+static const char* const kScope =
+    "scope: The nodes in the model graph are organized by their names, which "
+    "is hierarchical like filesystem.";
+static const char* const kCode =
+    "code: When python trace is available, the nodes are python lines and "
+    "their are organized by the python call stack.";
+static const char* const kOp =
+    "op: The nodes are operation kernel type, such as MatMul, Conv2D. Graph "
+    "nodes belonging to the same type are aggregated together.";
+static const char* const kAdvise =
+    "advise: Automatically profile and discover issues. (Experimental)";
+static const char* const kSet =
+    "set: Set a value for an option for future use.";
+static const char* const kHelp = "help: Print helping messages.";
+
+string QueryDoc(const string& cmd, const Options& opts) {
+  string cmd_help = "";
+  if (cmd == kCmds[0]) {
+    cmd_help = kScope;
+  } else if (cmd == kCmds[1]) {
+    cmd_help = kScope;
+  } else if (cmd == kCmds[2]) {
+    cmd_help = kCode;
+  } else if (cmd == kCmds[3]) {
+    cmd_help = kOp;
+  } else if (cmd == kCmds[4]) {
+    cmd_help = kAdvise;
+  } else if (cmd == kCmds[5]) {
+    cmd_help = kSet;
+  } else if (cmd == kCmds[6]) {
+    cmd_help = kHelp;
+  } else {
+    cmd_help = "Unknown command: " + cmd;
+  }
+
+  std::vector<string> helps;
+  for (const string& s : opts.select) {
+    if (s == kShown[0]) {
+      helps.push_back(kBytes);
+    } else if (s == kShown[1]) {
+      helps.push_back(strings::StrCat(kTotalMicrosHelp, "\n", kCPUHelp, "\n",
+                                      kAccMicrosHelp));
+    } else if (s == kShown[2]) {
+      helps.push_back(kParams);
+    } else if (s == kShown[3]) {
+      helps.push_back(kFloatOps);
+    } else if (s == kShown[4]) {
+      helps.push_back(kTensorValue);
+    } else if (s == kShown[5]) {
+      helps.push_back(kDevice);
+    } else if (s == kShown[6]) {
+      helps.push_back(kOpTypes);
+    } else if (s == kShown[7]) {
+      helps.push_back(kOccurrence);
+    } else if (s == kShown[8]) {
+      helps.push_back(kInputShapes);
+    } else if (s == kShown[9]) {
+      helps.push_back(kAccMicrosHelp);
+    } else if (s == kShown[10]) {
+      helps.push_back(kCPUHelp);
+    } else if (s == kShown[11]) {
+      helps.push_back(kPeakBytes);
+    } else if (s == kShown[12]) {
+      helps.push_back(kResidualBytes);
+    } else if (s == kShown[13]) {
+      helps.push_back(kOutputBytes);
+    } else {
+      helps.push_back("Unknown select: " + s);
+    }
+  }
+  return strings::StrCat("\nDoc:\n", cmd_help, "\n", absl::StrJoin(helps, "\n"),
+                         "\n\n");
 }
 
 }  // namespace tfprof

@@ -20,8 +20,10 @@ limitations under the License.
 #include <string>
 #include <utility>
 
-#include "tensorflow/core/distributed_runtime/server_lib.h"
+#include "grpc/support/alloc.h"
+
 #include "tensorflow/core/distributed_runtime/rpc/rpc_rendezvous_mgr.h"
+#include "tensorflow/core/distributed_runtime/server_lib.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/platform/env.h"
 
@@ -52,7 +54,10 @@ MPIServer::~MPIServer() {
 
 Status MPIServer::Init(ServiceInitFunction service_func,
                        RendezvousMgrCreationFunction rendezvous_mgr_func) {
-  Status s = GrpcServer::Init(service_func, rendezvous_mgr_func);
+  GrpcServerOptions opts;
+  opts.service_func = service_func;
+  opts.rendezvous_mgr_func = rendezvous_mgr_func;
+  Status s = GrpcServer::Init(opts);
   return s;
 }
 

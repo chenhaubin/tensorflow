@@ -2,11 +2,12 @@
 #   Contains ops to train linear models on top of TensorFlow.
 #   APIs here are meant to evolve over time.
 
-licenses(["notice"])  # Apache 2.0
+package(
+    default_visibility = ["//tensorflow:__subpackages__"],
+    licenses = ["notice"],  # Apache 2.0
+)
 
 exports_files(["LICENSE"])
-
-package(default_visibility = ["//tensorflow:__subpackages__"])
 
 load("//tensorflow:tensorflow.bzl", "py_test")
 
@@ -40,7 +41,12 @@ py_test(
     name = "sdca_ops_test",
     size = "medium",
     srcs = ["python/kernel_tests/sdca_ops_test.py"],
+    python_version = "PY2",
     srcs_version = "PY2AND3",
+    tags = [
+        "no_gpu",
+        "no_pip_gpu",
+    ],
     deps = [
         ":sdca_ops_py",
         ":sparse_feature_column_py",
@@ -76,6 +82,7 @@ py_test(
     name = "sharded_mutable_dense_hashtable_test",
     size = "small",
     srcs = ["python/ops/sharded_mutable_dense_hashtable_test.py"],
+    python_version = "PY2",
     srcs_version = "PY2AND3",
     deps = [
         ":sharded_mutable_dense_hashtable_py",
@@ -96,6 +103,7 @@ py_test(
     name = "sparse_feature_column_test",
     size = "small",
     srcs = ["python/ops/sparse_feature_column_test.py"],
+    python_version = "PY2",
     srcs_version = "PY2AND3",
     deps = [
         ":sparse_feature_column_py",
@@ -126,25 +134,16 @@ py_library(
 py_test(
     name = "sdca_estimator_test",
     srcs = ["python/sdca_estimator_test.py"],
+    python_version = "PY2",
+    shard_count = 4,
     srcs_version = "PY2AND3",
-    tags = ["notsan"],
     deps = [
         ":sdca_estimator_py",
         "//tensorflow/contrib/layers:layers_py",
+        "//tensorflow/core:protos_all_py",
         "//tensorflow/python:client_testlib",
         "//tensorflow/python:framework_for_generated_wrappers",
         "//tensorflow/python:sparse_tensor",
         "//third_party/py/numpy",
     ],
-)
-
-filegroup(
-    name = "all_files",
-    srcs = glob(
-        ["**/*"],
-        exclude = [
-            "**/METADATA",
-            "**/OWNERS",
-        ],
-    ),
 )

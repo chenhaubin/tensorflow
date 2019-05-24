@@ -25,26 +25,28 @@ limitations under the License.
 namespace tensorflow {
 namespace tfprof {
 
-const TFGraphNodeProto& TFShow::Show(const Options& opts) {
-  if (opts.output_type == kOutput[3]) {
-    return ShowInternal(opts, nullptr)->proto();
-  } else if (opts.output_type == kOutput[0]) {
+const GraphNodeProto& TFShow::Show(const string& prefix, const Options& opts) {
+  if (opts.output_type == kOutput[0]) {
     Timeline timeline(opts.step, opts.output_options.at(kTimelineOpts[0]));
     return ShowInternal(opts, &timeline)->proto();
-  } else if (opts.output_type == kOutput[2]) {
-    const ShowNode* root = ShowInternal(opts, nullptr);
-    Status s =
-        WriteStringToFile(Env::Default(), opts.output_options.at(kFileOpts[0]),
-                          root->formatted_str);
-    if (!s.ok()) {
-      fprintf(stderr, "%s\n", s.ToString().c_str());
-    }
-    return root->proto();
   } else {
-    const ShowNode* root = ShowInternal(opts, nullptr);
-    printf("%s", root->formatted_str.c_str());
-    fflush(stdout);
-    return root->proto();
+    const ShowNode* ret = ShowInternal(opts, nullptr);
+    if (opts.output_type == kOutput[1]) {
+      printf("%s", (prefix + ret->formatted_str).c_str());
+      fflush(stdout);
+    } else if (opts.output_type == kOutput[2]) {
+      Status s = WriteStringToFile(Env::Default(),
+                                   opts.output_options.at(kFileOpts[0]),
+                                   prefix + ret->formatted_str);
+      if (!s.ok()) {
+        fprintf(stderr, "%s\n", s.ToString().c_str());
+      }
+    } else if (opts.output_type == kOutput[3] ||
+               opts.output_type == kOutput[4]) {
+    } else {
+      fprintf(stderr, "Unknown output type: %s\n", opts.output_type.c_str());
+    }
+    return ret->proto();
   }
 }
 
@@ -71,8 +73,14 @@ bool TFShow::ShouldShow(const ShowNode* node, const Options& opts,
   // Always show kTFProfRoot.
   if (node->name() == kTFProfRoot) return true;
 
-  if (node->proto().requested_bytes() < opts.min_bytes ||
-      node->proto().exec_micros() < opts.min_micros ||
+  if (node->proto().total_requested_bytes() < opts.min_bytes ||
+      node->proto().total_peak_bytes() < opts.min_peak_bytes ||
+      node->proto().total_residual_bytes() < opts.min_residual_bytes ||
+      node->proto().total_output_bytes() < opts.min_output_bytes ||
+      node->proto().total_exec_micros() < opts.min_micros ||
+      node->proto().total_accelerator_exec_micros() <
+          opts.min_accelerator_micros ||
+      node->proto().total_cpu_exec_micros() < opts.min_cpu_micros ||
       node->proto().parameters() < opts.min_params ||
       node->proto().float_ops() < opts.min_float_ops ||
       node->proto().run_count() < opts.min_occurrence ||
@@ -126,6 +134,17 @@ bool TFShow::ReAccount(ShowNode* node, const Options& opts) {
   return false;
 }
 
+string TFShow::FormatNodeMemory(ShowNode* node, int64 bytes,
+                                int64 total_bytes) const {
+  string memory = FormatMemory(total_bytes);
+  if (node->account) {
+    memory = FormatMemory(bytes) + "/" + memory;
+  } else {
+    memory = "--/" + memory;
+  }
+  return memory;
+}
+
 string TFShow::FormatNode(ShowNode* node, const Options& opts) const {
   std::vector<string> info;
   if (opts.select.find(kShown[2]) != opts.select.end()) {
@@ -150,15 +169,22 @@ string TFShow::FormatNode(ShowNode* node, const Options& opts) const {
     }
     info.push_back(fops);
   }
+  std::vector<string> attrs;
   if (opts.select.find(kShown[0]) != opts.select.end()) {
-    string memory = FormatMemory(node->proto().total_requested_bytes());
-    if (node->account) {
-      memory = FormatMemory(node->proto().requested_bytes()) + "/" + memory;
-
-    } else {
-      memory = "--/" + memory;
-    }
-    info.push_back(memory);
+    info.push_back(FormatNodeMemory(node, node->proto().requested_bytes(),
+                                    node->proto().total_requested_bytes()));
+  }
+  if (opts.select.find(kShown[11]) != opts.select.end()) {
+    info.push_back(FormatNodeMemory(node, node->proto().peak_bytes(),
+                                    node->proto().total_peak_bytes()));
+  }
+  if (opts.select.find(kShown[12]) != opts.select.end()) {
+    info.push_back(FormatNodeMemory(node, node->proto().residual_bytes(),
+                                    node->proto().total_residual_bytes()));
+  }
+  if (opts.select.find(kShown[13]) != opts.select.end()) {
+    info.push_back(FormatNodeMemory(node, node->proto().output_bytes(),
+                                    node->proto().total_output_bytes()));
   }
   if (opts.select.find(kShown[1]) != opts.select.end()) {
     info.push_back(FormatTotalExecTime(node, opts));
@@ -175,12 +201,12 @@ string TFShow::FormatNode(ShowNode* node, const Options& opts) const {
   }
   if (opts.select.find(kShown[5]) != opts.select.end()) {
     if (node->proto().devices_size() > 0) {
-      info.push_back(str_util::Join(node->proto().devices(), "|"));
+      info.push_back(absl::StrJoin(node->proto().devices(), "|"));
     }
   }
   if (opts.select.find(kShown[6]) != opts.select.end()) {
     const std::set<string>& op_types = node->node->op_types();
-    info.push_back(str_util::Join(op_types, "|"));
+    info.push_back(absl::StrJoin(op_types, "|"));
   }
   if (opts.select.find(kShown[7]) != opts.select.end()) {
     string run = FormatNumber(node->proto().total_run_count());
@@ -204,14 +230,14 @@ string TFShow::FormatNode(ShowNode* node, const Options& opts) const {
         shape_vec.push_back(strings::Printf("%d:unknown", s.first));
       } else {
         shape_vec.push_back(strings::Printf(
-            "%d:%s", s.first, str_util::Join(s.second, "x").c_str()));
+            "%d:%s", s.first, absl::StrJoin(s.second, "x").c_str()));
       }
     }
-    info.push_back(str_util::Join(shape_vec, "|"));
+    info.push_back(absl::StrJoin(shape_vec, "|"));
   }
 
   return strings::Printf("%s (%s)", node->name().c_str(),
-                         str_util::Join(info, ", ").c_str());
+                         absl::StrJoin(info, ", ").c_str());
 }
 
 string TFShow::FormatLegend(const Options& opts) const {
@@ -223,6 +249,15 @@ string TFShow::FormatLegend(const Options& opts) const {
     legends.push_back("# float_ops");
   }
   if (opts.select.find(kShown[0]) != opts.select.end()) {
+    legends.push_back("requested bytes");
+  }
+  if (opts.select.find(kShown[11]) != opts.select.end()) {
+    legends.push_back("peak bytes");
+  }
+  if (opts.select.find(kShown[12]) != opts.select.end()) {
+    legends.push_back("residual bytes");
+  }
+  if (opts.select.find(kShown[13]) != opts.select.end()) {
     legends.push_back("output bytes");
   }
   if (opts.select.find(kShown[1]) != opts.select.end()) {
@@ -251,7 +286,7 @@ string TFShow::FormatLegend(const Options& opts) const {
     legends.push_back("input shapes");
   }
   return strings::Printf("node name | %s\n",
-                         str_util::Join(legends, " | ").c_str());
+                         absl::StrJoin(legends, " | ").c_str());
 }
 
 }  // namespace tfprof

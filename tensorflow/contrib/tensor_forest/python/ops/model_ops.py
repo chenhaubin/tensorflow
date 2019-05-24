@@ -17,20 +17,25 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import functools
+
 from tensorflow.contrib.tensor_forest.python.ops import gen_model_ops
-from tensorflow.contrib.tensor_forest.python.ops import stats_ops
 
 # pylint: disable=unused-import
 from tensorflow.contrib.tensor_forest.python.ops.gen_model_ops import feature_usage_counts
+from tensorflow.contrib.tensor_forest.python.ops.gen_model_ops import traverse_tree_v4
 from tensorflow.contrib.tensor_forest.python.ops.gen_model_ops import tree_predictions_v4
 from tensorflow.contrib.tensor_forest.python.ops.gen_model_ops import tree_size
+from tensorflow.contrib.tensor_forest.python.ops.gen_model_ops import update_model_v4
 # pylint: enable=unused-import
 
 from tensorflow.contrib.util import loader
+from tensorflow.python.eager import context
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import resources
 from tensorflow.python.platform import resource_loader
 from tensorflow.python.training import saver
+from tensorflow.python.training.tracking import tracking
 
 
 _model_ops = loader.load_op_library(
@@ -59,13 +64,7 @@ class TreeVariableSavable(saver.BaseSaverBuilder.SaveableObject):
       name: the name to save the tree variable under.
     """
     self.params = params
-    deps = []
-    if stats_handle is not None:
-      deps.append(stats_ops.finalize_tree(
-          tree_handle, stats_handle,
-          params=params.serialized_params_proto))
-    with ops.control_dependencies(deps):
-      tensor = gen_model_ops.tree_serialize(tree_handle)
+    tensor = gen_model_ops.tree_serialize(tree_handle)
     # slice_spec is useful for saving a slice from a variable.
     # It's not meaningful the tree variable. So we just pass an empty value.
     slice_spec = ""
@@ -93,6 +92,59 @@ class TreeVariableSavable(saver.BaseSaverBuilder.SaveableObject):
           params=self.params.serialized_params_proto)
 
 
+class TreeVariable(tracking.TrackableResource):
+  """A tree model."""
+
+  def __init__(self, params, tree_config, stats_handle, name, container=None):
+    self._params = params
+    self._tree_config = tree_config
+    self._stats_handle = stats_handle
+    self._name = name
+    self._container = container
+    self._init_op = None
+    super(TreeVariable, self).__init__()
+    self._resource_handle = self._create_resource()
+
+  def _create_resource(self):
+    if context.executing_eagerly():
+      # TODO(allenl): This will leak memory due to kernel caching by the
+      # shared_name attribute value (but is better than the alternative of
+      # sharing everything by default when executing eagerly; hopefully creating
+      # tables in a loop is uncommon).
+      shared_name = "tree_variable_%d" % (ops.uid(),)
+    else:
+      shared_name = self._name
+    return gen_model_ops.decision_tree_resource_handle_op(
+        self._container, shared_name=shared_name, name=self._name)
+
+  def _initialize(self):
+    return gen_model_ops.create_tree_variable(
+        self.resource_handle,
+        self._tree_config,
+        params=self._params.serialized_params_proto)
+
+  @property
+  def initializer(self):
+    if self._init_op is None:
+      self._init_op = self._initialize()
+    return self._init_op
+
+  def is_initialized(self):
+    return gen_model_ops.tree_is_initialized_op(self.resource_handle)
+
+  def _gather_saveables_for_checkpoint(self):
+    """For object-based checkpointing."""
+    return {
+        "tree_variable":
+            functools.partial(
+                TreeVariableSavable,
+                params=self._params,
+                tree_handle=self.resource_handle,
+                stats_handle=self._stats_handle,
+                create_op=self._init_op)
+    }
+
+
 def tree_variable(params, tree_config, stats_handle, name, container=None):
   r"""Creates a tree model and returns a handle to it.
 
@@ -107,18 +159,13 @@ def tree_variable(params, tree_config, stats_handle, name, container=None):
     A `Tensor` of type mutable `string`. The handle to the tree.
   """
   with ops.name_scope(name, "TreeVariable") as name:
-    resource_handle = gen_model_ops.decision_tree_resource_handle_op(
-        container, name, name=name)
-
-    create_op = gen_model_ops.create_tree_variable(
-        resource_handle,
-        tree_config,
-        params=params.serialized_params_proto)
-    is_initialized_op = gen_model_ops.tree_is_initialized_op(resource_handle)
+    tree_var = TreeVariable(params, tree_config, stats_handle, name, container)
+    resource_handle = tree_var.resource_handle
+    create_op = tree_var.initializer
+    is_initialized_op = tree_var.is_initialized()
     # Adds the variable to the savable list.
-    saveable = TreeVariableSavable(params, resource_handle, stats_handle,
-                                   create_op,
-                                   "tree_checkpoint_{0}".format(name))
+    saveable = tree_var._gather_saveables_for_checkpoint()["tree_variable"](  # pylint: disable=protected-access
+        name=resource_handle.name)
     ops.add_to_collection(ops.GraphKeys.SAVEABLE_OBJECTS, saveable)
     resources.register_resource(resource_handle, create_op, is_initialized_op)
     return resource_handle
